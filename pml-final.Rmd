@@ -1,0 +1,161 @@
+---
+title: "Practical Machine Learning Project"
+author: "Deepak"
+date: "August 7, 2017"
+output: html_document
+---
+## Project Instructions:
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+### Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+### Data
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+## Data Preprocessing
+```{r, echo=TRUE}
+set.seed(34343)
+## Read the dataset
+
+training<-read.csv("pml-training.csv",header = TRUE)
+testing <- read.csv("pml-testing.csv",header = TRUE)
+
+
+
+```
+
+Partitioning the Training Data Set into two sets
+```{r,echo=TRUE}
+library(caret)
+
+index <- createDataPartition(y=training$classe,p=.7, list=FALSE)
+
+train<- training[index,]
+test<- training[-index,]
+ 
+dim(train);dim(test)
+
+```
+
+
+## Cleaning The Data
+
+Remove Near-Zero Variance Predictors
+```{r,echo=TRUE}
+nzv<- nearZeroVar(train,saveMetrics = TRUE)
+train<- train[,nzv$nzv==FALSE]
+
+nzv<- nearZeroVar(test,saveMetrics = TRUE)
+test<- test[,nzv$nzv==FALSE]
+
+```
+Remove first column of train dataset.
+```{r,echo=TRUE}
+
+train<- train[,-c(1)]
+
+```
+
+Clear Variables with more than 70 percent of NAs.
+```{r,echo=TRUE}
+temp<- train
+i<-0
+j<-0
+for(i in 1:length(train)){
+  if(sum(is.na(train[,i]))/nrow(train) >.7){
+    for( j in 1:length(temp)){
+     if (length( grep(names(train[i]), names(temp)[j] ))==1){
+        temp<- temp[,-j]  
+     }
+    }
+  }
+}
+dim(temp)
+
+train<- temp
+rm(temp)
+
+```
+
+Transform the test and testing datasets
+```{r,echo=TRUE}
+cnames1<- colnames(train)
+cnames2<- colnames(train[,-58])
+
+test<- test[cnames1]
+testing<- testing[cnames2]
+
+
+```
+Coerce the data into same types.
+```{r,echo=TRUE}
+i<-0
+j<-0
+for(i in 1:length(testing)){
+  for(j in 1:length(train)){
+    if( length( grep(names(train[i]), names(testing)[j]) ) == 1){
+      class(testing[j]) = class(train[i])
+    }
+  }
+}
+
+testing <- rbind(train[2, -58] , testing)
+testing <- testing[-1,]
+```
+
+## Prediction with Decision Tree
+```{r,echo=TRUE}
+library(rpart)
+library(rpart.plot)
+set.seed(34343)
+
+modeldtree<-rpart(classe ~.,data=train,method="class")
+predtree<-predict(modeldtree,test,type="class")
+cmdtree<- confusionMatrix(test$classe,predtree)
+cmdtree
+
+```
+
+
+## Prediction with Random Forest
+
+```{r,echo=TRUE}
+
+set.seed(34343)
+library(randomForest)
+modelrf<- randomForest(classe ~., data=train)
+predrf<-predict(modelrf,test,type="class")
+cmrf<- confusionMatrix(predrf,test$classe)
+cmrf
+```
+
+
+```{r,echo=TRUE}
+plot(modelrf)
+
+```
+
+```{r,echo=TRUE}
+
+plot(cmrf$table, col = cmrf$byClass, main = paste("Random Forest Confusion Matrix: Accuracy =", round(cmrf$overall['Accuracy'], 4)))
+```
+
+
+As accuracy with Random Forest is better than with Decision Tree. So, we predict on final test data with Random Forest Model.
+The Expected Out-Of-Sample_error is 100-99.78=0.22.
+
+## Predicting Results on FinalTest Data
+
+```{r,echo=TRUE}
+
+final_pred<-predict(modelrf,testing,type="class")
+final_pred
+```
+
